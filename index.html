@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Panfish & Catfish Bait Engine V2</title>
+  <meta name="description" content="Smart bait selector for crappie, bluegill, and catfish. Condition-matched rigs with confidence scoring.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0e0f11">
+  <link rel="apple-touch-icon" href="icon.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: #0e0f11;
+      color: #d8d8d8;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container { max-width: 640px; margin: 0 auto; padding: 16px; }
+
+    /* ─── Header ─── */
+    .header {
+      text-align: center;
+      padding: 30px 20px 24px;
+      border-radius: 16px;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #0f2818 0%, #0f1a28 50%, #1a1210 100%);
+      border: 1px solid rgba(255,255,255,0.05);
+      position: relative;
+      overflow: hidden;
+    }
+    .header::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% -10%, rgba(46,204,113,0.1) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .header h1 { font-size: 1.5em; font-weight: 800; letter-spacing: -0.5px; color: #fff; position: relative; }
+    .header .subtitle { font-size: 0.78em; color: rgba(255,255,255,0.4); margin-top: 4px; position: relative; letter-spacing: 0.3px; }
+
+    /* ─── Glass Panel ─── */
+    .panel {
+      background: rgba(22,23,27,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+
+    /* ─── Species Buttons ─── */
+    .species-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .species-btn {
+      padding: 13px 8px; border-radius: 10px; border: 2px solid #2a2b2e;
+      background: rgba(30,31,35,0.8); color: #777;
+      font-family: 'Inter', sans-serif; font-size: 0.8em; font-weight: 700;
+      cursor: pointer; transition: all 0.25s ease; text-align: center; line-height: 1.3;
+    }
+    .species-btn .icon { font-size: 1.4em; display: block; margin-bottom: 3px; }
+    .species-btn:hover { border-color: #444; color: #aaa; }
+    .species-btn.active-crappie { border-color: #2ecc71; color: #2ecc71; background: rgba(46,204,113,0.06); box-shadow: 0 0 24px rgba(46,204,113,0.08); }
+    .species-btn.active-bluegill { border-color: #3498db; color: #3498db; background: rgba(52,152,219,0.06); box-shadow: 0 0 24px rgba(52,152,219,0.08); }
+    .species-btn.active-catfish { border-color: #f1c40f; color: #f1c40f; background: rgba(241,196,15,0.06); box-shadow: 0 0 24px rgba(241,196,15,0.08); }
+
+    /* ─── Cat Sub-Type Selector ─── */
+    .cat-type-row {
+      display: none;
+      margin-bottom: 14px;
+      animation: fadeSlide 0.2s ease forwards;
+    }
+    .cat-type-row label {
+      font-size: 0.72em; font-weight: 600; color: #b8960b;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
+      display: block;
+    }
+    .cat-type-row select {
+      width: 100%;
+      border-color: rgba(241,196,15,0.15);
+    }
+
+    /* ─── Conditions Toggle ─── */
+    details#conditionsPanel { margin-top: 2px; }
+    details#conditionsPanel > summary {
+      font-size: 0.78em; font-weight: 600; color: #666; text-transform: uppercase;
+      letter-spacing: 0.8px; cursor: pointer; padding: 6px 0 10px;
+      list-style: none; display: flex; align-items: center; gap: 6px;
+      user-select: none;
+    }
+    details#conditionsPanel > summary::-webkit-details-marker { display: none; }
+    details#conditionsPanel > summary::after { content: '▾'; font-size: 0.9em; transition: transform 0.2s; }
+    details#conditionsPanel[open] > summary::after { transform: rotate(180deg); }
+
+    /* ─── Conditions Summary Bar ─── */
+    .conditions-summary {
+      display: none;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      font-size: 0.76em;
+      color: #888;
+      margin-top: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+      line-height: 1.6;
+    }
+    .conditions-summary:hover { background: rgba(255,255,255,0.05); }
+    .conditions-summary .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 5px;
+      margin: 2px 3px 2px 0;
+      font-size: 0.95em;
+      color: #aaa;
+    }
+
+    /* ─── Form Grid ─── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .input-group { display: flex; flex-direction: column; }
+    .input-group label {
+      font-size: 0.72em; font-weight: 600; color: #555;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
+    }
+    select {
+      padding: 10px 32px 10px 12px;
+      background: rgba(30,32,36,0.9); color: #ccc;
+      border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
+      font-family: 'Inter', sans-serif; font-size: 0.85em;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23666' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+      cursor: pointer; transition: border-color 0.2s;
+    }
+    select:focus { outline: none; border-color: rgba(255,255,255,0.2); }
+    select:hover { border-color: rgba(255,255,255,0.15); }
+
+    /* ─── Form Section Dividers ─── */
+    .form-divider {
+      grid-column: 1 / -1;
+      height: 1px;
+      background: rgba(255,255,255,0.05);
+      margin: 8px 0;
+    }
+
+    /* ─── Run Button ─── */
+    .run-btn {
+      width: 100%; padding: 16px; border: none; border-radius: 12px;
+      font-family: 'Inter', sans-serif; font-size: 0.95em; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 1px;
+      cursor: pointer; transition: all 0.25s ease; margin-bottom: 16px;
+      position: relative; overflow: hidden;
+    }
+    .run-btn.crappie-theme { background: linear-gradient(135deg, #1e8449, #27ae60); color: #fff; }
+    .run-btn.bluegill-theme { background: linear-gradient(135deg, #21618c, #2e86c1); color: #fff; }
+    .run-btn.catfish-theme { background: linear-gradient(135deg, #b8860b, #d4a017); color: #111; }
+    .run-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(0,0,0,0.4); filter: brightness(1.08); }
+    .run-btn:active { transform: translateY(0); }
+
+    /* ─── Mood Card ─── */
+    .mood-card {
+      padding: 16px 18px;
+      border-radius: 12px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(255,255,255,0.06);
+      animation: fadeSlide 0.3s ease forwards;
+    }
+    .mood-card.mood-aggressive { background: linear-gradient(135deg, rgba(39,174,96,0.1), rgba(22,23,27,0.9)); border-left: 4px solid #27ae60; }
+    .mood-card.mood-neutral { background: linear-gradient(135deg, rgba(241,196,15,0.08), rgba(22,23,27,0.9)); border-left: 4px solid #d4a017; }
+    .mood-card.mood-lethargic { background: linear-gradient(135deg, rgba(192,57,43,0.08), rgba(22,23,27,0.9)); border-left: 4px solid #c0392b; }
+    .mood-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .mood-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .mood-dot.green { background: #27ae60; box-shadow: 0 0 8px rgba(39,174,96,0.5); }
+    .mood-dot.yellow { background: #d4a017; box-shadow: 0 0 8px rgba(212,160,23,0.5); }
+    .mood-dot.red { background: #c0392b; box-shadow: 0 0 8px rgba(192,57,43,0.5); }
+    .mood-label { font-size: 0.82em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+    .mood-label.green { color: #2ecc71; }
+    .mood-label.yellow { color: #f1c40f; }
+    .mood-label.red { color: #e74c3c; }
+    .mood-desc { font-size: 0.82em; color: #999; line-height: 1.5; }
+    .mood-factors { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .mood-factor {
+      font-size: 0.7em; padding: 3px 8px; border-radius: 5px;
+      background: rgba(255,255,255,0.04); color: #777; border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* ─── Results Header ─── */
+    .results-header {
+      font-size: 1.05em; font-weight: 700; margin-bottom: 12px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* ─── Bait Cards ─── */
+    .bait-card {
+      background: rgba(22,23,27,0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 10px;
+      border-left: 4px solid #444;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      animation: fadeSlide 0.35s ease forwards;
+      opacity: 0;
+    }
+    .bait-card:hover { transform: translateX(3px); box-shadow: 0 4px 20px rgba(0,0,0,0.25); }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .bait-card:nth-child(2) { animation-delay: 0.1s; }
+    .bait-card:nth-child(3) { animation-delay: 0.2s; }
+    .bait-card:nth-child(4) { animation-delay: 0.3s; }
+
+    .bait-card.rank-1-crappie { border-left-color: #2ecc71; background: linear-gradient(135deg, rgba(46,204,113,0.04), rgba(22,23,27,0.9)); }
+    .bait-card.rank-1-bluegill { border-left-color: #3498db; background: linear-gradient(135deg, rgba(52,152,219,0.04), rgba(22,23,27,0.9)); }
+    .bait-card.rank-1-catfish { border-left-color: #f1c40f; background: linear-gradient(135deg, rgba(241,196,15,0.04), rgba(22,23,27,0.9)); }
+
+    .bait-name {
+      font-size: 1.02em; font-weight: 700; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .bait-name .rank {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 6px;
+      font-size: 0.72em; font-weight: 800; flex-shrink: 0;
+    }
+    .rank-crappie { background: rgba(46,204,113,0.12); color: #2ecc71; }
+    .rank-bluegill { background: rgba(52,152,219,0.12); color: #3498db; }
+    .rank-catfish { background: rgba(241,196,15,0.12); color: #f1c40f; }
+
+    .bait-detail { font-size: 0.83em; color: #999; margin-bottom: 4px; line-height: 1.5; }
+    .bait-detail b { color: #bbb; }
+
+    /* ─── Color Dots ─── */
+    .color-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.15);
+      vertical-align: middle;
+      margin-right: 2px;
+    }
+
+    /* ─── Score Bar ─── */
+    .score-bar-wrap {
+      margin: 10px 0 6px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .score-bar-track {
+      flex: 1; height: 6px; border-radius: 3px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%; border-radius: 3px;
+      animation: barFill 0.6s ease forwards;
+      width: 0;
+    }
+    @keyframes barFill { to { width: var(--bar-w); } }
+    .score-bar-fill.bar-high { background: linear-gradient(90deg, #1e8449, #2ecc71); }
+    .score-bar-fill.bar-mid { background: linear-gradient(90deg, #b8860b, #d4a017); }
+    .score-bar-fill.bar-low { background: linear-gradient(90deg, #922b21, #c0392b); }
+    .score-pct { font-size: 0.7em; font-weight: 700; color: #666; min-width: 32px; text-align: right; }
+
+    /* ─── Expandables (How to Fish & Rig Visual) ─── */
+    .expand-section {
+      margin-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      padding-top: 6px;
+    }
+    .expand-section summary {
+      font-size: 0.76em; font-weight: 600; color: #666;
+      cursor: pointer; list-style: none; user-select: none;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .expand-section summary::-webkit-details-marker { display: none; }
+    .expand-section summary::before { content: '▸'; font-size: 0.9em; transition: transform 0.2s; display: inline-block; }
+    .expand-section[open] summary::before { transform: rotate(90deg); }
+    
+    .technique-text {
+      font-size: 0.8em; color: #888; margin-top: 6px; line-height: 1.55;
+      padding: 8px 10px; background: rgba(255,255,255,0.02); border-radius: 6px;
+    }
+    .technique-text .tip-line {
+      margin-bottom: 4px; padding-left: 12px; position: relative;
+    }
+    .technique-text .tip-line::before {
+      content: '→'; position: absolute; left: 0; color: #555;
+    }
+
+    /* ─── Rigging Visuals (CSS Diagrams) ─── */
+    .rig-diagram {
+      margin-top: 8px; padding: 12px;
+      background: rgba(0,0,0,0.2); border-radius: 6px;
+      display: flex; flex-direction: column; gap: 4px;
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+    .rig-item {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 0.75em; color: #aaa;
+    }
+    .rig-line { width: 2px; height: 16px; background: rgba(255,255,255,0.2); margin-left: 11px; }
+    .rig-icon {
+      width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 1.1em;
+    }
+    .rig-label { font-weight: 600; }
+
+    /* ─── Pro Tip Box ─── */
+    .tip-box {
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-top: 14px;
+      animation: fadeSlide 0.4s ease forwards;
+      animation-delay: 0.35s;
+      opacity: 0;
+      background: rgba(22,23,27,0.85);
+      backdrop-filter: blur(10px);
+    }
+    .tip-box.crappie-tip { border-color: rgba(46,204,113,0.15); }
+    .tip-box.bluegill-tip { border-color: rgba(52,152,219,0.15); }
+    .tip-box.catfish-tip { border-color: rgba(241,196,15,0.15); }
+    .tip-label {
+      font-size: 0.7em; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 5px;
+    }
+    .tip-label.crappie-label { color: #2ecc71; }
+    .tip-label.bluegill-label { color: #3498db; }
+    .tip-label.catfish-label { color: #f1c40f; }
+    .tip-text { font-size: 0.82em; color: #999; line-height: 1.55; }
+
+    /* ─── Footer ─── */
+    .footer { text-align: center; padding: 22px 0 12px; font-size: 0.68em; color: #333; }
+
+    /* ─── Responsive ─── */
+    @media (max-width: 420px) {
+      .container { padding: 10px; }
+      .header h1 { font-size: 1.3em; }
+      .form-grid { gap: 10px; }
+      .bait-name { font-size: 0.95em; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>🐟 Panfish & Catfish Engine</h1>
+    <div class="subtitle">Crappie · Bluegill · Channel · Blue · Flathead</div>
+  </div>
+
+  <div class="panel">
+    <div class="species-row">
+      <button type="button" class="species-btn active-crappie" id="btn-crappie" onclick="selectSpecies('crappie')">
+        <span class="icon">🐟</span>Crappie
+      </button>
+      <button type="button" class="species-btn" id="btn-bluegill" onclick="selectSpecies('bluegill')">
+        <span class="icon">🐠</span>Bluegill
+      </button>
+      <button type="button" class="species-btn" id="btn-catfish" onclick="selectSpecies('catfish')">
+        <span class="icon">🐱</span>Catfish
+      </button>
+    </div>
+
+    <!-- Catfish sub-type -->
+    <div class="cat-type-row" id="catTypeRow">
+      <label>Catfish Species</label>
+      <select id="catType">
+        <option value="channel">Channel Cat — Scavenger / Eats Everything</option>
+        <option value="blue">Blue Cat — Predator / Fresh Cut Bait King</option>
+        <option value="flathead">Flathead — Ambush / Live Bait Only</option>
+      </select>
+    </div>
+
+    <details id="conditionsPanel" open>
+      <summary>Conditions</summary>
+      <div class="form-grid">
+        
+        <!-- NEW INPUTS -->
+        <div class="input-group">
+          <label>Season</label>
+          <select id="season">
+            <option value="spring">Spring (Pre-Spawn / Spawn)</option>
+            <option value="summer" selected>Summer</option>
+            <option value="fall">Fall (Turnover / Feeding)</option>
+            <option value="winter">Winter</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Moon Phase</label>
+          <select id="moon">
+            <option value="new">New Moon / Dark</option>
+            <option value="quarter" selected>Quarter / Partial</option>
+            <option value="full">Full Moon / Bright</option>
+          </select>
+        </div>
+        <div class="input-group full">
+          <label>Primary Forage (What are they eating?)</label>
+          <select id="forage">
+            <option value="shad">Shad / Minnows / Baitfish</option>
+            <option value="crawfish">Crawfish</option>
+            <option value="insects">Insects / Worms / Frogs (Ponds)</option>
+          </select>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <div class="input-group">
+          <label>Water Body</label>
+          <select id="waterBody">
+            <option value="lake">Lake / Pond (Still Water)</option>
+            <option value="river">River / Creek (Current)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Water Temp (°F)</label>
+          <select id="temp">
+            <option value="45">Cold (&lt; 50°F)</option>
+            <option value="55">Pre-Spawn (50–60°F)</option>
+            <option value="65">Spawn (60–70°F)</option>
+            <option value="75" selected>Summer (70–80°F)</option>
+            <option value="85">Hot (&gt; 80°F)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Water Clarity</label>
+          <select id="water">
+            <option value="muddy">Muddy / Heavy Stain</option>
+            <option value="stained">Stained / Green</option>
+            <option value="clear">Clear</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Time of Day</label>
+          <select id="time">
+            <option value="day">Daytime / Sun</option>
+            <option value="cloudy">Overcast / Low Light</option>
+            <option value="night">Night Fishing</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Target Depth</label>
+          <select id="depth">
+            <option value="shallow">Shallow (0–5 ft)</option>
+            <option value="mid">Mid-Depth (5–15 ft)</option>
+            <option value="deep">Deep (15+ ft)</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Wind</label>
+          <select id="wind">
+            <option value="calm">Calm</option>
+            <option value="light" selected>Light Breeze</option>
+            <option value="moderate">Moderate Wind</option>
+            <option value="heavy">Heavy / Whitecaps</option>
+          </select>
+        </div>
+        <div class="input-group full">
+          <label>Barometric Pressure</label>
+          <select id="pressure">
+            <option value="falling">Falling (Storm Coming)</option>
+            <option value="stable" selected>Stable</option>
+            <option value="rising">Rising (Post-Front)</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <div id="conditionsSummary" class="conditions-summary" onclick="reopenConditions()"></div>
+  </div>
+
+  <button type="button" class="run-btn crappie-theme" id="runBtn" onclick="run()">Find the Bite</button>
+
+  <div id="out"></div>
+
+  <div class="footer">Panfish & Catfish Engine V2.1 — Built for bank & boat anglers</div>
+</div>
+
+<script>
+/* =====================================================================
+   SPECIES STATE
+   ===================================================================== */
+let currentSpecies = "crappie";
+
+function selectSpecies(sp) {
+  currentSpecies = sp;
+  document.querySelectorAll(".species-btn").forEach(b => b.className = "species-btn");
+  document.getElementById("btn-" + sp).classList.add("active-" + sp);
+  document.getElementById("runBtn").className = "run-btn " + sp + "-theme";
+  document.getElementById("catTypeRow").style.display = sp === "catfish" ? "block" : "none";
+}
+
+/* =====================================================================
+   COLOR SWATCH MAP
+   ===================================================================== */
+const SWATCHES = {
+  "white":"#e8e8e8","chartreuse":"#c8e600","pink":"#ff6b9d","pearl":"#f0e8d8",
+  "silver":"#b8b8c0","gold":"#d4a017","black":"#383838","natural":"#8b7355",
+  "firetiger":"#ff6600","orange":"#ff8c00","red":"#cc3333","brown":"#7a4a2a",
+  "smoke":"#9898a8","lime":"#a0d911","junebug":"#5b2c6f","cream":"#f0e0c0",
+  "yellow":"#e8c800","blue":"#3080d0","ghost":"#c8c8d8","bloody":"#8b1a1a",
+  "earth":"#6b4423","tan":"#c8a878","monkey":"#c8b898","electric":"#c8e000",
+  "shad":"#a0a8b0","hot":"#ff4060",
+};
+
+function swatchDots(colorStr) {
+  const low = colorStr.toLowerCase();
+  const dots = [];
+  for (const [name, hex] of Object.entries(SWATCHES)) {
+    if (low.includes(name) && dots.length < 2) dots.push(hex);
+  }
+  if (!dots.length) dots.push("#888");
+  return dots.map(h => `<span class="color-dot" style="background:${h}"></span>`).join("");
+}
+
+/* =====================================================================
+   BAIT DATABASE (Added 'rig' property)
+   ===================================================================== */
+const baits = [
+  // ── CRAPPIE ──
+  { name:"Live Minnow on Slip Bobber", species:"crappie", base:92, icon:"🐟", rig:"slip-bobber",
+    depth:["shallow","mid","deep"], tags:["live","finesse","vertical","baitfish"],
+    colors:{clear:"Natural Silver",stained:"Natural Silver",muddy:"Natural Silver"},
+    desc:"Set bobber stop 1–2 ft above marked fish. Crappie feed upward — never set below them." },
+  { name:"Marabou Hair Jig (1/16 oz)", species:"crappie", base:88, icon:"🪶", rig:"jig-head",
+    depth:["shallow","mid"], tags:["jig","finesse","casting","baitfish"],
+    colors:{clear:"White / Pearl",stained:"Chartreuse / White",muddy:"Chartreuse / Hot Pink"},
+    desc:"Steady slow reel or vertical jig over brush piles. The pulsing marabou does the work." },
+  { name:"Tube Jig (Bobby Garland / Slab Slay'R)", species:"crappie", base:90, icon:"🐛", rig:"jig-head",
+    depth:["shallow","mid","deep"], tags:["jig","soft plastic","vertical","casting","baitfish"],
+    colors:{clear:"Monkey Milk / Pearl",stained:"Electric Chicken / Junebug",muddy:"Black / Chartreuse"},
+    desc:"Cast and slow-roll or tight-line vertically. The go-to tournament crappie bait year-round." },
+  { name:"Curly Tail Grub (2 inch)", species:"crappie", base:84, icon:"🪱", rig:"jig-head",
+    depth:["mid","deep"], tags:["jig","soft plastic","casting","baitfish"],
+    colors:{clear:"Smoke / Pearl",stained:"White / Chartreuse",muddy:"Chartreuse / Lime"},
+    desc:"Cast and swim over deeper structure. Tail action draws fish from a wide radius." },
+  { name:"Road Runner Jig (1/16 oz)", species:"crappie", base:83, icon:"🔔", rig:"jig-head",
+    depth:["shallow","mid"], tags:["jig","reaction","casting","blade","baitfish"],
+    colors:{clear:"White / Silver",stained:"Chartreuse / Gold",muddy:"Chartreuse / Gold"},
+    desc:"Cast and steady-reel. The spinner blade adds flash and vibration to locate scattered fish." },
+  { name:"Jigging Spoon (1/4 oz)", species:"crappie", base:76, icon:"🥄", rig:"direct",
+    depth:["deep"], tags:["vertical","reaction","heavy","baitfish"],
+    colors:{clear:"Silver",stained:"Gold",muddy:"Gold"},
+    desc:"Drop straight down over deep schools. Lift-and-flutter. Best when crappie are stacked in winter." },
+  { name:"Micro Crankbait (Bitsy Pond Minnow)", species:"crappie", base:78, icon:"🐡", rig:"direct",
+    depth:["mid"], tags:["reaction","casting","search","baitfish"],
+    colors:{clear:"Silver Shad / Ghost",stained:"Firetiger",muddy:"Firetiger / Chartreuse"},
+    desc:"Troll or cast along drop-offs to locate scattered schools. Great search bait." },
+  { name:"Live Shiner on Cork", species:"crappie", base:87, icon:"🎈", rig:"fixed-bobber",
+    depth:["shallow","mid"], tags:["live","finesse","baitfish"],
+    colors:{clear:"Natural",stained:"Natural",muddy:"Natural"},
+    desc:"Fixed cork 2–4 ft deep around docks, laydowns, or brush. Deadly during the spawn." },
+  { name:"Micro Spinnerbait (1/8 oz)", species:"crappie", base:79, icon:"💫", rig:"direct",
+    depth:["shallow","mid"], tags:["reaction","casting","search","blade","baitfish"],
+    colors:{clear:"White / Silver",stained:"Chartreuse / White",muddy:"Chartreuse / Gold"},
+    desc:"Slow-roll around structure. Covers water fast and triggers reflex strikes in pre-spawn." },
+
+  // ── BLUEGILL ──
+  { name:"Live Cricket under Bobber", species:"bluegill", base:92, icon:"🦗", rig:"fixed-bobber",
+    depth:["shallow","mid"], tags:["live","natural","scent","insects"],
+    colors:{clear:"Natural",stained:"Natural",muddy:"Natural"},
+    desc:"The king of bluegill baits. Set 2–3 ft deep around beds, docks, or vegetation." },
+  { name:"Wax Worm on Small Hook (#8–10)", species:"bluegill", base:89, icon:"🐛", rig:"split-shot",
+    depth:["shallow","mid","deep"], tags:["live","finesse","scent","insects"],
+    colors:{clear:"Natural Cream",stained:"Natural Cream",muddy:"Natural Cream"},
+    desc:"Thread once through the head. Incredibly effective for finicky or pressured fish." },
+  { name:"Red Worm Piece", species:"bluegill", base:87, icon:"🪱", rig:"split-shot",
+    depth:["shallow","mid"], tags:["live","natural","scent","insects"],
+    colors:{clear:"Natural Red",stained:"Natural Red",muddy:"Natural Red"},
+    desc:"Pinch off a 1-inch piece. Don't glob the whole worm — bluegill have small mouths." },
+  { name:"Beetle Spin (1/16 oz)", species:"bluegill", base:83, icon:"🔔", rig:"direct",
+    depth:["shallow","mid"], tags:["casting","reaction","search","blade","baitfish"],
+    colors:{clear:"White / Silver",stained:"Chartreuse / Gold",muddy:"Chartreuse / Gold"},
+    desc:"Cast past the beds and slow-reel through. Great search bait for finding active schools." },
+  { name:"Micro Jig + Wax Worm (1/64 oz)", species:"bluegill", base:86, icon:"🎯", rig:"jig-head",
+    depth:["shallow","mid"], tags:["jig","finesse","live","scent","insects"],
+    colors:{clear:"Black / Chartreuse",stained:"Chartreuse / Pink",muddy:"Chartreuse / Orange"},
+    desc:"Tip a tiny ice jig with a wax worm. Deadly sight-fishing over beds in clear water." },
+  { name:"Popping Bug / Fly", species:"bluegill", base:80, icon:"🪰", rig:"direct",
+    depth:["shallow"], tags:["topwater","finesse","sight","insects"],
+    colors:{clear:"Black / Yellow",stained:"Chartreuse / White",muddy:"Black / Yellow"},
+    desc:"Pop-and-pause near cover. Explosive on calm summer mornings and evenings." },
+  { name:"Nightcrawler Piece on Drop Shot", species:"bluegill", base:82, icon:"🪱", rig:"drop-shot",
+    depth:["mid","deep"], tags:["natural","scent","finesse","vertical","insects"],
+    colors:{clear:"Natural Earth",stained:"Natural Earth",muddy:"Natural Earth"},
+    desc:"Drop shot off docks or deep brush. Keeps bait right in the strike zone for big gills." },
+  { name:"Small Rooster Tail (1/16 oz)", species:"bluegill", base:78, icon:"🌀", rig:"direct",
+    depth:["shallow","mid"], tags:["casting","reaction","search","blade","baitfish"],
+    colors:{clear:"White / Silver",stained:"Firetiger",muddy:"Chartreuse / Gold"},
+    desc:"Cast and steady-reel. Inline spinner draws bluegill from a wide radius in open water." },
+  { name:"Bread Ball on Treble Hook", species:"bluegill", base:70, icon:"🍞", rig:"split-shot",
+    depth:["shallow"], tags:["simple","natural"],
+    colors:{clear:"White",stained:"White",muddy:"White"},
+    desc:"Pinch bread tight around a #10 treble. Classic farm pond bait. Works in a pinch." },
+
+  // ── CATFISH ──
+  { name:"Fresh Cut Shad / Skipjack", species:"catfish", base:93, icon:"🔪", rig:"bottom-rig",
+    depth:["shallow","mid","deep"], tags:["cut","scent","natural","baitfish"],
+    colors:{clear:"Bloody / Natural",stained:"Bloody / Natural",muddy:"Bloody / Natural"},
+    desc:"The ultimate for blues and big channels. Hook through the meaty section. Keep it fresh." },
+  { name:"Chicken Livers", species:"catfish", base:84, icon:"🥩", rig:"bottom-rig",
+    depth:["mid","deep"], tags:["scent","prepared"],
+    colors:{clear:"Red / Brown",stained:"Red / Brown",muddy:"Red / Brown"},
+    desc:"High scent trail. Wrap with Magic Thread or nylon to keep it on the hook." },
+  { name:"Punch Bait / Stink Bait", species:"catfish", base:82, icon:"🧀", rig:"slip-bobber",
+    depth:["shallow","mid","deep"], tags:["scent","prepared","current"],
+    colors:{clear:"Brown",stained:"Brown",muddy:"Brown"},
+    desc:"Use a treble sponge hook. Punches through the smell barrier in muddy water and current." },
+  { name:"Nightcrawler Glob", species:"catfish", base:80, icon:"🪱", rig:"bottom-rig",
+    depth:["shallow","mid"], tags:["live","natural","scent","insects"],
+    colors:{clear:"Natural Earth",stained:"Natural Earth",muddy:"Natural Earth"},
+    desc:"Thread 2–3 large crawlers on a circle hook. Great all-around bait, especially after rain." },
+  { name:"Live Sunfish / Bream", species:"catfish", base:88, icon:"🐠", rig:"slip-bobber",
+    depth:["mid","deep"], tags:["live","natural","trophy","baitfish"],
+    colors:{clear:"Natural",stained:"Natural",muddy:"Natural"},
+    desc:"Hook through the back on a circle hook. The #1 flathead bait — period." },
+  { name:"Raw Shrimp", species:"catfish", base:79, icon:"🦐", rig:"bottom-rig",
+    depth:["shallow","mid"], tags:["natural","scent"],
+    colors:{clear:"Natural Pink",stained:"Natural Pink",muddy:"Natural Pink"},
+    desc:"Peel the shell for max scent dispersal. Works well in lakes and mild current." },
+  { name:"Dip Bait on Sponge Hook", species:"catfish", base:81, icon:"🫧", rig:"slip-bobber",
+    depth:["shallow","mid","deep"], tags:["scent","prepared","current"],
+    colors:{clear:"Brown / Tan",stained:"Brown / Tan",muddy:"Brown / Tan"},
+    desc:"CJ's, Danny King, or Team Catfish. Melts slowly creating a scent trail in current." },
+  { name:"Live Crawfish", species:"catfish", base:82, icon:"🦞", rig:"split-shot",
+    depth:["shallow","mid"], tags:["live","natural","crawfish"],
+    colors:{clear:"Natural",stained:"Natural",muddy:"Natural"},
+    desc:"Hook through the tail. Channels and flatheads love them around rocky structure." },
+  { name:"Soap Bait (Zote / Ivory)", species:"catfish", base:72, icon:"🧼", rig:"split-shot",
+    depth:["shallow","mid","deep"], tags:["prepared","scent","current"],
+    colors:{clear:"Pink / White",stained:"Pink / White",muddy:"Pink / White"},
+    desc:"Old-school secret. Cube it and thread on a treble. Slowly dissolves and attracts channels." },
+  { name:"Live Shad / Skipjack (Hooked)", species:"catfish", base:85, icon:"🐟", rig:"slip-bobber",
+    depth:["mid","deep"], tags:["live","natural","baitfish"],
+    colors:{clear:"Natural Silver",stained:"Natural Silver",muddy:"Natural Silver"},
+    desc:"Hook through the nose or back on a circle hook. Keep them lively — blues key on the struggling vibration." },
+  { name:"Hot Dogs (Cut on Treble)", species:"catfish", base:70, icon:"🌭", rig:"split-shot",
+    depth:["shallow","mid"], tags:["prepared","scent","simple"],
+    colors:{clear:"Red / Pink",stained:"Red / Pink",muddy:"Red / Pink"},
+    desc:"Cut into 1-inch chunks. Cheap, always available, and channel cats eat them surprisingly well." }
+];
+
+/* =====================================================================
+   RIG VISUALIZER (CSS Emojis/Layout)
+   ===================================================================== */
+function renderRig(rigType) {
+  const line = `<div class="rig-line"></div>`;
+  switch(rigType) {
+    case 'slip-bobber':
+      return `
+        <div class="rig-item"><div class="rig-icon" style="font-size:0.7em">🧵</div><div class="rig-label">Bobber Stop</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon">🎈</div><div class="rig-label">Slip Bobber</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon" style="font-size:0.6em">⚫</div><div class="rig-label">Split Shot Weight</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon">🪝</div><div class="rig-label">Hook & Bait</div></div>
+      `;
+    case 'fixed-bobber':
+      return `
+        <div class="rig-item"><div class="rig-icon">🎈</div><div class="rig-label">Fixed Bobber</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon" style="font-size:0.6em">⚫</div><div class="rig-label">Split Shot (Optional)</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon">🪝</div><div class="rig-label">Hook & Bait</div></div>
+      `;
+    case 'bottom-rig': // Carolina / Slip sinker
+      return `
+        <div class="rig-item"><div class="rig-icon">🥚</div><div class="rig-label">Egg Sinker (Sliding)</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon" style="font-size:0.8em">♾️</div><div class="rig-label">Barrel Swivel</div></div>
+        ${line}
+        <div class="rig-item" style="opacity:0.6"><div class="rig-icon">➖</div><div class="rig-label">Leader Line (1–2 ft)</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon">🪝</div><div class="rig-label">Circle Hook & Bait</div></div>
+      `;
+    case 'drop-shot':
+      return `
+        <div class="rig-item"><div class="rig-icon">🪝</div><div class="rig-label">Hook tied in-line (Stand out)</div></div>
+        ${line}
+        <div class="rig-item" style="opacity:0.6"><div class="rig-icon">➖</div><div class="rig-label">Leader Line (1 ft)</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon" style="font-size:0.8em">🪨</div><div class="rig-label">Drop Shot Weight (Bottom)</div></div>
+      `;
+    case 'jig-head':
+      return `
+        <div class="rig-item"><div class="rig-icon" style="font-size:0.8em">➰</div><div class="rig-label">Tie Direct (Loop Knot)</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon">🪶</div><div class="rig-label">Jig Head / Plastic</div></div>
+      `;
+    case 'split-shot':
+      return `
+        <div class="rig-item"><div class="rig-icon" style="font-size:0.6em">⚫</div><div class="rig-label">Split Shot (1 ft above hook)</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon">🪝</div><div class="rig-label">Light Wire Hook</div></div>
+      `;
+    default:
+      return `
+        <div class="rig-item"><div class="rig-icon">➰</div><div class="rig-label">Tie Direct to Main Line</div></div>
+        ${line}
+        <div class="rig-item"><div class="rig-icon">🐟</div><div class="rig-label">Lure</div></div>
+      `;
+  }
+}
+
+/* =====================================================================
+   SCORING ENGINE
+   ===================================================================== */
+function scoreBait(b, c) {
+  let score = b.base;
+  if (b.species !== c.species) return -999;
+
+  // ── Depth ──
+  if (!b.depth.includes(c.depth)) score -= 25;
+
+  const temp = parseInt(c.temp);
+
+  /* ── Forage Logic (Applies to all) ── */
+  if (c.forage === "shad" && b.tags.includes("baitfish")) score += 6;
+  if (c.forage === "shad" && b.tags.includes("insects")) score -= 3;
+  
+  if (c.forage === "crawfish" && b.tags.includes("crawfish")) score += 8;
+  if (c.forage === "crawfish" && b.tags.includes("jig")) score += 4;
+  
+  if (c.forage === "insects" && b.tags.includes("insects")) score += 8;
+  if (c.forage === "insects" && b.tags.includes("topwater")) score += 5;
+  if (c.forage === "insects" && b.tags.includes("baitfish")) score -= 5;
+
+
+  /* ────────────── CRAPPIE ────────────── */
+  if (c.species === "crappie") {
+    // Season Logic
+    if (c.season === "spring") {
+      if (b.tags.includes("live") || b.tags.includes("jig")) score += 5;
+      if (c.depth === "shallow" && temp >= 55) score += 10;
+    } else if (c.season === "fall") {
+      if (b.tags.includes("reaction") || b.tags.includes("search")) score += 6;
+      if (b.tags.includes("baitfish")) score += 5;
+      if (c.depth === "mid") score += 5;
+    } else if (c.season === "winter") {
+      if (b.tags.includes("vertical") || b.tags.includes("finesse")) score += 8;
+      if (b.tags.includes("reaction")) score -= 10;
+    }
+
+    // Temperature (Base)
+    if (temp <= 50) {
+      if (b.tags.includes("live")) score += 12;
+      if (b.tags.includes("reaction")) score -= 12;
+      if (b.tags.includes("finesse")) score += 5;
+      if (c.depth === "deep") score += 5;
+    } else if (temp <= 60) {
+      if (b.tags.includes("jig")) score += 6;
+      if (b.tags.includes("blade")) score += 5;
+    } else if (temp <= 70) {
+      if (c.depth === "shallow") score += 10;
+      if (b.tags.includes("jig")) score += 8;
+      if (c.depth === "deep") score -= 8;
+    } else if (temp <= 80) {
+      if (b.tags.includes("vertical")) score += 8;
+      if (c.depth === "mid" || c.depth === "deep") score += 5;
+    } else {
+      if (c.depth === "deep") score += 8;
+      if (b.tags.includes("live")) score += 6;
+    }
+
+    // Moon & Time
+    if (c.time === "night") {
+      if (c.moon === "full") score += 5; // Light helps crappie see jigs
+      if (c.moon === "new") { if (b.tags.includes("live")) score += 8; }
+      if (b.tags.includes("live")) score += 10;
+      if (b.tags.includes("search")) score -= 8;
+    }
+
+    // Clarity, Water Body, Wind, Pressure... (same as before)
+    if (c.water === "muddy") {
+      if (b.tags.includes("reaction") || b.tags.includes("blade")) score += 5;
+    } else if (c.water === "clear") {
+      if (b.tags.includes("finesse")) score += 5;
+    }
+    if (c.pressure === "falling") score += 4;
+    if (c.pressure === "rising") { score -= 4; if (b.tags.includes("live")) score += 5; }
+  }
+
+  /* ────────────── BLUEGILL ────────────── */
+  if (c.species === "bluegill") {
+    // Season Logic
+    if (c.season === "spring") {
+      if (b.tags.includes("insects") || b.tags.includes("scent")) score += 6;
+      if (c.depth === "shallow") score += 8;
+    } else if (c.season === "summer") {
+      if (b.tags.includes("topwater")) score += 8;
+    } else if (c.season === "winter") {
+      if (b.tags.includes("finesse") || b.tags.includes("scent")) score += 8;
+      if (c.depth === "shallow") score -= 15;
+    }
+
+    if (temp <= 50) {
+      if (b.tags.includes("live") || b.tags.includes("scent")) score += 10;
+      if (b.tags.includes("reaction") || b.tags.includes("topwater")) score -= 25;
+    } else if (temp <= 70) {
+      if (c.depth === "shallow") score += 10;
+      if (b.tags.includes("live")) score += 5;
+    } else if (temp > 80 && c.time === "day" && c.depth === "shallow") {
+      score -= 8;
+    }
+
+    // Moon & Time
+    if (c.time === "night") {
+      score -= 10;
+      if (c.moon === "full") score += 5; // Bluegill feed slightly better under full moon
+      if (c.moon === "new") score -= 5;
+      if (b.tags.includes("live")) score += 8;
+      if (b.tags.includes("topwater")) score -= 15;
+    }
+
+    if (c.pressure === "falling") score += 3;
+    if (c.pressure === "rising") { score -= 4; if (b.tags.includes("live") || b.tags.includes("scent")) score += 5; }
+  }
+
+  /* ────────────── CATFISH ────────────── */
+  if (c.species === "catfish") {
+    // Season Logic
+    if (c.season === "spring") {
+      if (b.tags.includes("cut") || b.tags.includes("scent")) score += 5;
+    } else if (c.season === "fall") {
+      if (b.tags.includes("baitfish") || b.tags.includes("cut")) score += 8; // Gorging on shad
+    } else if (c.season === "winter") {
+      if (b.tags.includes("cut")) score += 8;
+      if (b.tags.includes("prepared")) score -= 10;
+      if (c.depth === "shallow") score -= 15;
+    }
+
+    if (temp <= 50) {
+      if (b.tags.includes("cut")) score += 10;
+      if (b.tags.includes("prepared")) score -= 8;
+      if (c.depth === "shallow") score -= 10;
+    } else if (temp > 80) {
+      if (c.time === "night") score += 12;
+      if (c.time === "day" && c.depth === "shallow") score -= 12;
+    }
+
+    // Moon & Time
+    if (c.time === "night") {
+      score += 6;
+      if (c.depth === "shallow") score += 8;
+      
+      // Catfish moon phase impact
+      if (c.moon === "new") score += 8; // Dark moon is prime for cats
+      if (c.moon === "full" && c.catType === "flathead") score -= 10; // Flatheads hate bright moons
+    }
+    
+    if (c.pressure === "falling") score += 6;
+
+    /* ── CATFISH SUB-TYPE MODIFIERS ── */
+    if (c.catType === "channel") {
+      if (b.tags.includes("prepared")) score += 6;
+      if (b.tags.includes("simple")) score += 4;
+      if (b.tags.includes("trophy")) score -= 8;
+    }
+    if (c.catType === "blue") {
+      if (b.tags.includes("cut")) score += 12;
+      if (b.tags.includes("baitfish")) score += 10;
+      if (b.tags.includes("prepared")) score -= 15;
+      if (c.waterBody === "river") score += 3;
+    }
+    if (c.catType === "flathead") {
+      if (b.tags.includes("live")) score += 15;
+      if (b.tags.includes("trophy")) score += 12;
+      if (b.name.includes("Crawfish")) score += 6;
+      if (b.tags.includes("prepared")) score -= 28;
+      if (b.tags.includes("cut")) score -= 15;
+      if (!b.tags.includes("live") && !b.tags.includes("natural")) score -= 12;
+      if (c.time === "day") score -= 6;
+    }
+  }
+
+  return score;
+}
+
+
+/* =====================================================================
+   MOOD / ACTIVITY PREDICTION
+   ===================================================================== */
+function getMood(c) {
+  let mood = 50;
+  const temp = parseInt(c.temp);
+  const factors = [];
+
+  // Season
+  if (c.season === "spring") { mood += 10; factors.push("🌸 Spring spawn push"); }
+  if (c.season === "fall") { mood += 8; factors.push("🍂 Fall feeding frenzy"); }
+  if (c.season === "winter") { mood -= 10; factors.push("❄️ Winter lethargy"); }
+
+  // Moon
+  if (c.time === "night") {
+    if (c.species === "catfish" && c.moon === "new") { mood += 10; factors.push("🌑 Dark night (Prime for cats)"); }
+    if (c.species === "catfish" && c.moon === "full" && c.catType === "flathead") { mood -= 15; factors.push("🌕 Bright moon (Flatheads spooked)"); }
+    if (c.species !== "catfish" && c.moon === "full") { mood += 5; factors.push("🌕 Full moon visibility"); }
+  }
+
+  // Pressure
+  if (c.pressure === "falling") { mood += 14; factors.push("📉 Falling pressure — feeding frenzy"); }
+  else if (c.pressure === "rising") { mood -= 12; factors.push("📈 Post-front lockjaw"); }
+
+  // Temperature
+  if (c.species === "crappie") {
+    if (temp >= 55 && temp <= 70) { mood += 10; }
+    else if (temp <= 50) { mood -= 10; }
+  } else if (c.species === "bluegill") {
+    if (temp >= 65 && temp <= 80) { mood += 10; }
+    else if (temp <= 50) { mood -= 14; }
+  } else {
+    if (temp >= 70 && temp <= 85) { mood += 10; }
+    else if (temp <= 50) { mood -= 12; }
+  }
+
+  // Classify
+  let level, dotClass, labelClass, desc;
+  if (mood >= 62) {
+    level = "Aggressive"; dotClass = "green"; labelClass = "green";
+    if (c.species === "catfish") {
+      desc = c.catType === "flathead"
+        ? "Flatheads are leaving their lairs to hunt under cover of darkness. Live bait near heavy timber will get crushed."
+        : c.catType === "blue"
+        ? "Blues are schooled up and actively chasing baitfish. Fresh cut shad in the current will get hit fast."
+        : "Channels are roaming and feeding on everything. Scent trails will draw them from a distance.";
+    } else {
+      desc = c.species === "crappie"
+        ? "Crappie are active and willing to chase. They're hitting on the fall and the retrieve — cover water."
+        : "Bluegill are aggressive and territorial. They'll attack almost anything that enters their space.";
+    }
+  } else if (mood >= 42) {
+    level = "Neutral"; dotClass = "yellow"; labelClass = "yellow";
+    if (c.species === "catfish") {
+      desc = "Catfish are holding in structure but will eat if bait is presented well. Patience and fresh bait are key.";
+    } else {
+      desc = "Fish are catchable but won't chase far. Present bait close to cover and be patient with your retrieve.";
+    }
+  } else {
+    level = "Lethargic"; dotClass = "red"; labelClass = "red";
+    if (c.species === "catfish") {
+      desc = c.catType === "flathead"
+        ? "Flatheads are buried in cover and not moving. Only a perfect live bait presentation on their nose will work."
+        : "Catfish are sluggish. Soak fresh cut bait right on the bottom in the deepest holes and wait.";
+    } else {
+      desc = "Fish are deep and inactive. Downsize everything, fish slow, and target deep structure.";
+    }
+  }
+
+  return { level, dotClass, labelClass, desc, factors };
+}
+
+
+/* =====================================================================
+   PER-BAIT SPOT GUIDANCE
+   ===================================================================== */
+function getSpot(bait, c) {
+  const lake = c.waterBody === "lake";
+  
+  if (c.species === "crappie") {
+    if (c.season === "fall") return lake ? "Cruising main lake points and creek channels following shad schools." : "Eddies near creek mouths where baitfish wash in.";
+    if (c.season === "spring" && c.depth === "shallow") return lake ? "Shallow brush and laydowns in 1-5 ft of water." : "Protected backwaters away from the main current.";
+    return lake ? "Suspended over brush piles and timber." : "Slack water behind bridge pilings and current breaks.";
+  }
+  
+  if (c.species === "bluegill") {
+    if (c.season === "spring") return lake ? "Sandy/gravel flats looking for beds." : "Firm bottomed backwaters out of the current.";
+    if (bait.tags.includes("topwater")) return lake ? "Shaded pockets under overhanging trees." : "Calm eddy pools with surface film.";
+    return lake ? "Dock pilings and weed edges." : "Undercut banks and slow pools.";
+  }
+
+  if (c.species === "catfish") {
+    if (c.catType === "flathead") return lake ? "The absolute thickest log jams and submerged trees in deep water." : "Heavy timber and undercut banks on deep outside bends.";
+    if (c.catType === "blue") return lake ? "Open water channel ledges and drop-offs where baitfish school." : "Tailraces and strong current seams.";
+    return lake ? "Mud flats (at night) or deep holes (daytime)." : "Riprap banks and downstream holes.";
+  }
+
+  return "";
+}
+
+
+/* =====================================================================
+   DYNAMIC TECHNIQUE TIPS
+   ===================================================================== */
+function getTechnique(bait, c) {
+  const tips = [];
+  
+  if (parseInt(c.temp) <= 50) {
+    if (bait.tags.includes("jig") || bait.tags.includes("casting")) tips.push("Dead-slow it. 3–5 second pauses between hops. Cold fish won't chase.");
+    if (bait.tags.includes("live")) tips.push("Let it soak longer. Cold fish commit slowly — wait for the bobber to fully submerge.");
+    if (bait.tags.includes("reaction")) tips.push("Barely crawl it. Reaction baits are a tough sell in cold water.");
+  }
+  
+  if (c.water === "muddy") {
+    if (bait.tags.includes("jig") || bait.tags.includes("blade")) tips.push("Bump cover to create vibration. Fish are hunting by feel.");
+    if (bait.tags.includes("topwater")) tips.push("Pop it louder and more aggressively. Sound is critical in muddy water.");
+    if (bait.tags.includes("live") || bait.tags.includes("scent")) tips.push("Let the bait sit. Fish need time to track the scent in low visibility.");
+  }
+  
+  if (c.water === "clear") {
+    if (bait.tags.includes("finesse")) tips.push("Downsize your line and use subtle movements. Clear water fish see everything.");
+  }
+
+  if (c.pressure === "rising") {
+    tips.push("Post-front lockjaw: Downsize and slow down your presentation. Put it on their nose.");
+  }
+  
+  if (c.season === "fall" && c.species === "crappie" && bait.tags.includes("baitfish")) {
+    tips.push("Match the hatch: mimic small shad fleeing in the upper water column.");
+  }
+  
+  if (c.species === "catfish" && c.catType === "flathead" && bait.tags.includes("live")) {
+    tips.push("Use heavy tackle and lock your drag down. When a flathead hits, it will immediately dive back into the logs.");
+  }
+  
+  if (c.wind === "heavy") {
+    if (bait.tags.includes("topwater")) tips.push("Tough conditions for surface baits. Work it back with the waves.");
+    if (bait.tags.includes("live") || bait.tags.includes("vertical")) tips.push("Use a heavier sinker to hold your position in the chop.");
+  }
+  
+  return tips;
+}
+
+
+/* =====================================================================
+   COLOR SELECTION
+   ===================================================================== */
+function getColor(b, c) {
+  return b.colors[c.water] || b.colors.stained || Object.values(b.colors)[0];
+}
+
+
+/* =====================================================================
+   PRO TIPS
+   ===================================================================== */
+function getProTip(c) {
+  if (c.species === "catfish" && c.catType === "flathead" && c.moon === "full") return "A bright full moon often pushes flatheads tighter to cover and makes them less aggressive. Focus heavily on the darkest shadows of the log jams.";
+  if (c.season === "fall") return "Fall fishing is all about bait. Find the bait (shad, minnows), and you'll find the predators right underneath them.";
+  if (c.pressure === "falling") return "Barometric pressure is dropping — this triggers a feeding frenzy. Get your bait in the water now before the storm hits.";
+  if (c.species === "crappie" && c.season === "spring") return "Spring crappie push shallow. Don't waste time fishing deep holes — get up on the banks, laydowns, and docks.";
+  if (c.species === "bluegill" && c.forage === "insects") return "In farm ponds with insect forage, a popping bug on a fly rod or a small bobber in the evening is absolutely lethal.";
+  return "Always trust your electronics to find structure, but let the fish tell you what they want by experimenting with depth.";
+}
+
+
+/* =====================================================================
+   CONDITIONS SUMMARY / COLLAPSE
+   ===================================================================== */
+function buildSummary(c) {
+  const spLabel = (c.species === "catfish" && c.catType) 
+    ? { channel:"🐱 Channel", blue:"🐱 Blue", flathead:"🐱 Flathead" }[c.catType] 
+    : { crappie:"🐟 Crappie", bluegill:"🐠 Bluegill", catfish:"🐱 Catfish" }[c.species];
+    
+  const seasLabel = { spring:"Spring", summer:"Summer", fall:"Fall", winter:"Winter" }[c.season];
+  const moonLabel = { new:"New Moon", quarter:"Quarter Moon", full:"Full Moon" }[c.moon];
+  const forageLabel = { shad:"Shad Base", crawfish:"Crawfish Base", insects:"Insect Base" }[c.forage];
+  
+  const pills = [spLabel, seasLabel, moonLabel, forageLabel, c.time, c.water];
+  return pills.map(p => `<span class="pill">${p}</span>`).join(" ") + ` <span style="color:#555; font-size:0.9em; margin-left:4px;">tap to edit</span>`;
+}
+
+function reopenConditions() {
+  document.getElementById("conditionsPanel").open = true;
+  document.getElementById("conditionsSummary").style.display = "none";
+}
+
+
+/* =====================================================================
+   SCORE → PERCENTAGE
+   ===================================================================== */
+function scoreToPercent(score) {
+  const pct = Math.round(((score - 45) / 75) * 100);
+  return Math.max(12, Math.min(100, pct));
+}
+function barClass(pct) {
+  if (pct >= 70) return "bar-high";
+  if (pct >= 45) return "bar-mid";
+  return "bar-low";
+}
+
+
+/* =====================================================================
+   MAIN RENDER
+   ===================================================================== */
+function run() {
+  const c = {
+    species: currentSpecies,
+    season: document.getElementById("season").value,
+    moon: document.getElementById("moon").value,
+    forage: document.getElementById("forage").value,
+    waterBody: document.getElementById("waterBody").value,
+    temp: document.getElementById("temp").value,
+    water: document.getElementById("water").value,
+    time: document.getElementById("time").value,
+    depth: document.getElementById("depth").value,
+    wind: document.getElementById("wind").value,
+    pressure: document.getElementById("pressure").value,
+    catType: currentSpecies === "catfish" ? document.getElementById("catType").value : null
+  };
+
+  // Collapse conditions & show summary
+  document.getElementById("conditionsPanel").open = false;
+  const summaryEl = document.getElementById("conditionsSummary");
+  summaryEl.innerHTML = buildSummary(c);
+  summaryEl.style.display = "block";
+
+  // Score & sort
+  const results = baits
+    .map(b => ({ ...b, sc: scoreBait(b, c) }))
+    .filter(b => b.sc > 0)
+    .sort((a, b) => b.sc - a.sc);
+
+  const sp = c.species;
+  const rankClass = "rank-" + sp;
+  const topClass = "rank-1-" + sp;
+
+  let headerLabel = sp.charAt(0).toUpperCase() + sp.slice(1);
+  if (sp === "catfish" && c.catType) headerLabel = { channel:"Channel Cat", blue:"Blue Cat", flathead:"Flathead" }[c.catType];
+
+  // ── Mood Card ──
+  const mood = getMood(c);
+  let html = `
+  <div class="mood-card mood-${mood.level.toLowerCase()}">
+    <div class="mood-header">
+      <span class="mood-dot ${mood.dotClass}"></span>
+      <span class="mood-label ${mood.labelClass}">${mood.level} Activity</span>
+    </div>
+    <div class="mood-desc">${mood.desc}</div>
+    <div class="mood-factors">${mood.factors.map(f => `<span class="mood-factor">${f}</span>`).join("")}</div>
+  </div>`;
+
+  // ── Results ──
+  html += `<div class="results-header">Top ${headerLabel} Rigs</div>`;
+
+  if (results.length === 0) {
+    html += `<div class="bait-card" style="opacity:1;">No strong matches. Try adjusting conditions.</div>`;
+  } else {
+    results.slice(0, 3).forEach((b, i) => {
+      const pct = scoreToPercent(b.sc);
+      const color = getColor(b, c);
+      const dots = swatchDots(color);
+      const spot = getSpot(b, c);
+      const techTips = getTechnique(b, c);
+
+      let techHtml = "";
+      if (techTips.length > 0 || b.desc) {
+        let inner = "";
+        if (b.desc) inner += `<div style="margin-bottom:6px;">${b.desc}</div>`;
+        if (techTips.length > 0) inner += techTips.map(t => `<div class="tip-line">${t}</div>`).join("");
+        techHtml = `
+        <details class="expand-section">
+          <summary>How to fish this</summary>
+          <div class="technique-text">${inner}</div>
+        </details>`;
+      }
+
+      // Rigging Diagram HTML
+      let rigHtml = "";
+      if (b.rig) {
+        rigHtml = `
+        <details class="expand-section">
+          <summary>View Rig Setup</summary>
+          <div class="rig-diagram">
+            ${renderRig(b.rig)}
+          </div>
+        </details>`;
+      }
+
+      html += `
+      <div class="bait-card ${i === 0 ? topClass : ''}">
+        <div class="bait-name">
+          <span class="rank ${rankClass}">${i + 1}</span>
+          ${b.icon} ${b.name}
+        </div>
+        <div class="bait-detail"><b>Color:</b> ${dots} ${color}</div>
+        <div class="bait-detail"><b>Target:</b> ${spot}</div>
+        <div class="score-bar-wrap">
+          <div class="score-bar-track">
+            <div class="score-bar-fill ${barClass(pct)}" style="--bar-w:${pct}%"></div>
+          </div>
+          <span class="score-pct">${pct}%</span>
+        </div>
+        ${techHtml}
+        ${rigHtml}
+      </div>`;
+    });
+  }
+
+  // ── Pro Tip ──
+  const tip = getProTip(c);
+  if (tip) {
+    html += `
+    <div class="tip-box ${sp}-tip">
+      <div class="tip-label ${sp}-label">💡 Pro Tip</div>
+      <div class="tip-text">${tip}</div>
+    </div>`;
+  }
+
+  document.getElementById("out").innerHTML = html;
+  document.getElementById("out").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').then(registration => {
+        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+      }).catch(err => {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
